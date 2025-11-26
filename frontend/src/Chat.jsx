@@ -7,7 +7,7 @@ import trashIcon from "./icons/trash.svg";
 import userIcon from "./icons/user.svg";
 import botIcon from "./icons/bot.svg";
 import sparklesIcon from "./icons/sparkles.svg";
-import clipIcon from "./icons/clip.svg";
+import documentIcon from "./icons/document.svg";
 import sendIcon from "./icons/send.svg";
 import arrowLeftIcon from "./icons/sidebar.svg";
 import arrowRightIcon from "./icons/sidebar.svg";
@@ -19,11 +19,19 @@ export default function ModernChat() {
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
+    
+    // Estados para documentos
+    const [documents, setDocuments] = useState([]);
+    const [selectedDocumentId, setSelectedDocumentId] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    
     const chatBoxRef = useRef(null);
     const streamingContentRef = useRef("");
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         loadConversations();
+        loadDocuments();
     }, []);
 
     useEffect(() => {
@@ -72,12 +80,25 @@ export default function ModernChat() {
         }
     };
 
+    const loadDocuments = async () => {
+        try {
+            const response = await fetch("http://localhost:3000/documents");
+            const data = await response.json();
+            setDocuments(data);
+        } catch (error) {
+            console.error("Error cargando documentos:", error);
+        }
+    };
+
     const createNewConversation = async () => {
         try {
             const response = await fetch("http://localhost:3000/conversations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title: "Nueva conversación" })
+                body: JSON.stringify({ 
+                    title: "Nueva conversación",
+                    documentId: selectedDocumentId 
+                })
             });
             const data = await response.json();
             setCurrentConversationId(data.id);
@@ -106,6 +127,56 @@ export default function ModernChat() {
         }
     };
 
+    const handleFileSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("document", file);
+
+        setIsUploading(true);
+
+        try {
+            const response = await fetch("http://localhost:3000/upload-document", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                alert(`✅ Documento "${data.document.filename}" procesado correctamente!\n${data.document.chunks} fragmentos creados.`);
+                await loadDocuments();
+            } else {
+                console.error("Error del servidor:", data);
+                alert(`❌ Error al procesar el documento:\n${data.error || "Error desconocido"}`);
+            }
+        } catch (error) {
+            console.error("Error subiendo documento:", error);
+            alert(`❌ Error al subir el documento:\n${error.message}`);
+        } finally {
+            setIsUploading(false);
+            e.target.value = "";
+        }
+    };
+
+    const deleteDocument = async (docId, e) => {
+        e.stopPropagation();
+        if (!window.confirm("¿Eliminar este documento y todos sus datos?")) return;
+
+        try {
+            await fetch(`http://localhost:3000/documents/${docId}`, {
+                method: "DELETE"
+            });
+            await loadDocuments();
+            if (selectedDocumentId === docId) {
+                setSelectedDocumentId(null);
+            }
+        } catch (error) {
+            console.error("Error eliminando documento:", error);
+        }
+    };
+
     const sendMessage = async () => {
         if (!input.trim() || isLoading) return;
 
@@ -114,7 +185,10 @@ export default function ModernChat() {
             const response = await fetch("http://localhost:3000/conversations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title: input.substring(0, 50) })
+                body: JSON.stringify({ 
+                    title: input.substring(0, 50),
+                    documentId: selectedDocumentId 
+                })
             });
             const data = await response.json();
             convId = data.id;
@@ -134,9 +208,14 @@ export default function ModernChat() {
 
         try {
             const encodedMessage = encodeURIComponent(messageToSend);
-            const response = await fetch(
-                `http://localhost:3000/chat-stream?message=${encodedMessage}&conversationId=${convId}`
-            );
+            let url = `http://localhost:3000/chat-stream?message=${encodedMessage}&conversationId=${convId}`;
+            
+            // Agregar documentId si hay uno seleccionado
+            if (selectedDocumentId) {
+                url += `&documentId=${selectedDocumentId}`;
+            }
+
+            const response = await fetch(url);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -170,6 +249,7 @@ export default function ModernChat() {
                 }
             }
             await loadMessages(convId);
+            await loadConversations(); // Recargar para actualizar el contador
         } catch (error) {
             console.error("Error al enviar mensaje:", error);
             setMessages(prevMessages => {
@@ -193,6 +273,8 @@ export default function ModernChat() {
         }
     };
 
+    const selectedDoc = documents.find(d => d.id === selectedDocumentId);
+
     return (
         <div className="modern-chat-wrapper">
             <div className={`modern-sidebar ${showSidebar ? 'show' : 'hide'}`}>
@@ -211,12 +293,67 @@ export default function ModernChat() {
                         />
                     </button>
                 </div>
+
                 <button className="new-chat-btn" onClick={createNewConversation}>
                     <span className="plus-icon">
                         <img src={plusIcon} alt="New" className="svg-icon small" />
                     </span>
                     Nuevo chat
                 </button>
+
+                {/* Sección de Documentos */}
+                <div className="sidebar-section">
+                    <h3 className="section-title">Documentos</h3>
+                     
+                    <button 
+                        className="upload-doc-btn"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                    >
+                        {isUploading ? "Procesando..." : "📄 Cargar documento"}
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.txt,.doc,.docx"
+                        style={{ display: "none" }}
+                        onChange={handleFileSelect}
+                    />
+
+                    <div className="documents-container">
+                        {documents.length === 0 ? (
+                            <p className="empty-message">No hay documentos cargados</p>
+                        ) : (
+                            documents.map((doc) => (
+                                <div 
+                                    key={doc.id}
+                                    className={`document-card ${selectedDocumentId === doc.id ? 'active' : ''}`}
+                                    onClick={() => setSelectedDocumentId(
+                                        selectedDocumentId === doc.id ? null : doc.id
+                                    )}
+                                >
+                                    <div className="document-info">
+                                        <span className="document-icon"><img src={documentIcon} alt="Document" className="svg-icon" /></span>
+                                        <div className="document-text">
+                                            <div className="document-name">
+                                                {doc.filename}
+                                            </div>
+                                            <div className="document-meta">
+                                                {doc.totalChunks} fragmentos
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        className="delete-doc-btn"
+                                        onClick={(e) => deleteDocument(doc.id, e)}
+                                    >
+                                        <img src={trashIcon} alt="Delete" className="svg-icon small" />
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
 
                 <div className="sidebar-section">
                     <h3 className="section-title">Historial de chats</h3>
@@ -237,6 +374,7 @@ export default function ModernChat() {
                                         </div>
                                         <div className="conversation-meta">
                                             {conv.message_count} mensajes
+                                            {conv.document_id && " • 📄"}
                                         </div>
                                     </div>
                                 </div>
@@ -254,13 +392,36 @@ export default function ModernChat() {
 
             {/* Main Chat Area */}
             <div className="modern-chat-main">
+                {/* Indicador de documento activo */}
+                {selectedDoc && (
+                    <div className="active-document-banner">
+                        <span><img src={documentIcon} alt="Document" className="svg-icon" /> Consultando: <strong>{selectedDoc.filename}</strong></span>
+                        <button 
+                            className="close-doc-btn"
+                            onClick={() => setSelectedDocumentId(null)}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
+
                 {messages.length === 0 ? (
                     <div className="empty-state">
                         <div className="orb-container">
                             <div className="orb"></div>
                         </div>
-                        <h1 className="empty-title">Ready to Create Something New?</h1>
-                        <p className="empty-subtitle">Start a conversation and let AI assist you</p>
+                        <h1 className="empty-title">
+                            {selectedDoc 
+                                ? `Pregúntame sobre ${selectedDoc.filename}` 
+                                : "Ready to Create Something New?"
+                            }
+                        </h1>
+                        <p className="empty-subtitle">
+                            {selectedDoc 
+                                ? "Haz preguntas sobre el contenido del documento" 
+                                : "Start a conversation and let AI assist you"
+                            }
+                        </p>
                     </div>
                 ) : (
                     <div className="messages-container" ref={chatBoxRef}>
@@ -296,14 +457,11 @@ export default function ModernChat() {
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyPress={handleKeyPress}
-                            placeholder="Ask Anything..."
+                            placeholder={selectedDoc ? "Pregunta sobre el documento seleccionado" : "Pregunta lo que quieras"}
                             disabled={isLoading}
                             className="modern-input"
                         />
                         <div className="input-actions">
-                            <button className="action-btn" title="Attach">
-                                <img src={clipIcon} alt="Attach" className="svg-icon" />
-                            </button>
                             <button 
                                 className="send-btn"
                                 onClick={sendMessage}

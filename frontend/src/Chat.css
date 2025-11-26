@@ -518,3 +518,172 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
 }
+
+/* Sección de documentos */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.toggle-section-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px 8px;
+    transition: all 0.2s;
+}
+
+.toggle-section-btn:hover {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.upload-doc-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+}
+
+.upload-doc-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.upload-doc-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.documents-container {
+    max-height: 250px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+.document-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.document-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(4px);
+}
+
+.document-card.active {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    border-color: #667eea;
+}
+
+.document-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.document-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.document-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.document-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.document-meta {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 2px;
+}
+
+.delete-doc-btn {
+    background: rgba(255, 59, 48, 0.1);
+    border: none;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.delete-doc-btn:hover {
+    background: rgba(255, 59, 48, 0.2);
+    transform: scale(1.1);
+}
+
+.empty-message {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+    padding: 20px;
+}
+
+/* Banner de documento activo */
+.active-document-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+}
+
+.active-document-banner strong {
+    color: #667eea;
+    font-weight: 600;
+}
+
+.close-doc-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.close-doc-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 1);
+}
+
+/* Ajustes para el área de mensajes cuando hay banner */
+.modern-chat-main:has(.active-document-banner) .messages-container,
+.modern-chat-main:has(.active-document-banner) .empty-state {
+    height: calc(100% - 140px);
+}

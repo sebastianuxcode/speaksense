@@ -1,10 +1,53 @@
 import express from "express";
 import cors from "cors";
 import Database from "better-sqlite3";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { 
+  processDocument, 
+  deleteDocument, 
+  getAllDocuments, 
+  searchInDocuments 
+} from "./document-processor-simple.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Configurar multer para subir archivos
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = "./uploads";
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir);
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${file.originalname}`;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "application/pdf",
+      "text/plain",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword"
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Tipo de archivo no permitido. Solo PDF, TXT, DOC, DOCX"));
+    }
+  }
+});
 
 // Inicializar base de datos SQLite
 const db = new Database("chat_history.db");
@@ -14,7 +57,8 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        title TEXT
+        title TEXT,
+        document_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS messages (
@@ -27,7 +71,61 @@ db.exec(`
     );
 `);
 
-// Endpoint para obtener todas las conversaciones
+// ==================== ENDPOINTS DE DOCUMENTOS ====================
+
+// Subir y procesar documento
+app.post("/upload-document", upload.single("document"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No se subió ningún archivo" });
+    }
+
+    console.log("Archivo recibido:", req.file.originalname);
+
+    const result = await processDocument(
+      req.file.path,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    // Eliminar archivo temporal después de procesar
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      document: result
+    });
+  } catch (error) {
+    console.error("Error procesando documento:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener lista de documentos
+app.get("/documents", (req, res) => {
+  try {
+    const documents = getAllDocuments();
+    res.json(documents);
+  } catch (error) {
+    console.error("Error obteniendo documentos:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar documento
+app.delete("/documents/:id", (req, res) => {
+  try {
+    const result = deleteDocument(req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error("Error eliminando documento:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== ENDPOINTS DE CONVERSACIONES ====================
+
+// Obtener todas las conversaciones
 app.get("/conversations", (req, res) => {
     try {
         const conversations = db.prepare(`
@@ -45,22 +143,26 @@ app.get("/conversations", (req, res) => {
     }
 });
 
-// Endpoint para crear nueva conversación
+// Crear nueva conversación
 app.post("/conversations", (req, res) => {
     try {
-        const { title } = req.body;
+        const { title, documentId } = req.body;
         const result = db.prepare(`
-            INSERT INTO conversations (title) VALUES (?)
-        `).run(title || "Nueva conversación");
+            INSERT INTO conversations (title, document_id) VALUES (?, ?)
+        `).run(title || "Nueva conversación", documentId || null);
         
-        res.json({ id: result.lastInsertRowid, title });
+        res.json({ 
+          id: result.lastInsertRowid, 
+          title,
+          documentId 
+        });
     } catch (error) {
         console.error("Error creando conversación:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Endpoint para obtener mensajes de una conversación
+// Obtener mensajes de una conversación
 app.get("/conversations/:id/messages", (req, res) => {
     try {
         const messages = db.prepare(`
@@ -76,13 +178,28 @@ app.get("/conversations/:id/messages", (req, res) => {
     }
 });
 
-// ENDPOINT ORIGINAL: GET /chat-stream (compatibilidad con tu código existente)
+// Eliminar conversación
+app.delete("/conversations/:id", (req, res) => {
+    try {
+        db.prepare("DELETE FROM messages WHERE conversation_id = ?").run(req.params.id);
+        db.prepare("DELETE FROM conversations WHERE id = ?").run(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error eliminando conversación:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ==================== CHAT CON RAG ====================
+
 app.get("/chat-stream", async (req, res) => {
     const message = req.query.message;
     const conversationId = req.query.conversationId;
+    const documentId = req.query.documentId; // Nuevo parámetro
 
     console.log("Mensaje recibido:", message);
     console.log("Conversation ID:", conversationId);
+    console.log("Document ID:", documentId);
 
     // Configurar SSE
     res.setHeader("Content-Type", "text/event-stream");
@@ -106,9 +223,61 @@ app.get("/chat-stream", async (req, res) => {
                 WHERE conversation_id = ? 
                 ORDER BY created_at ASC
             `).all(conversationId);
+        }
+
+        // Si hay documentId, usar RAG
+        let finalMessages = [];
+        if (documentId && documentId !== 'null' && documentId !== 'undefined') {
+            console.log("Usando RAG para documento:", documentId);
+            
+            try {
+                // Buscar contexto relevante (ahora es síncrono)
+                const { context, chunks } = searchInDocuments(message, [documentId]);
+                
+                console.log(`Encontrados ${chunks.length} chunks relevantes`);
+                
+                // Crear prompt con contexto
+                const ragPrompt = `Basándote ÚNICAMENTE en la siguiente información del documento, responde la pregunta del usuario. Si la información no está en el documento, di que no puedes responder basándote en el documento proporcionado.
+
+CONTEXTO DEL DOCUMENTO:
+${context}
+
+PREGUNTA DEL USUARIO: ${message}
+
+RESPUESTA:`;
+
+                finalMessages = [
+                    ...history.slice(0, -1).map(msg => ({
+                        role: msg.role === "bot" ? "assistant" : msg.role,
+                        content: msg.content
+                    })),
+                    {
+                        role: "user",
+                        content: ragPrompt
+                    }
+                ];
+            } catch (ragError) {
+                console.error("Error en RAG:", ragError);
+                // Si falla RAG, continuar con chat normal
+                finalMessages = history.map(msg => ({
+                    role: msg.role === "bot" ? "assistant" : msg.role,
+                    content: msg.content
+                }));
+                
+                if (finalMessages.length === 0) {
+                    finalMessages = [{ role: "user", content: message }];
+                }
+            }
         } else {
-            // Si no hay conversación, solo enviar el mensaje actual
-            history = [{ role: "user", content: message }];
+            // Chat normal sin RAG
+            finalMessages = history.map(msg => ({
+                role: msg.role === "bot" ? "assistant" : msg.role,
+                content: msg.content
+            }));
+            
+            if (finalMessages.length === 0) {
+                finalMessages = [{ role: "user", content: message }];
+            }
         }
 
         console.log("Conectando a LM Studio...");
@@ -119,11 +288,10 @@ app.get("/chat-stream", async (req, res) => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 model: "lmstudio",
-                messages: history.map(msg => ({
-                    role: msg.role === "bot" ? "assistant" : msg.role,
-                    content: msg.content
-                })),
-                stream: true
+                messages: finalMessages,
+                stream: true,
+                temperature: 0.7,
+                max_tokens: 2000
             })
         });
 
@@ -187,17 +355,7 @@ app.get("/chat-stream", async (req, res) => {
     }
 });
 
-// Endpoint para eliminar conversación
-app.delete("/conversations/:id", (req, res) => {
-    try {
-        db.prepare("DELETE FROM messages WHERE conversation_id = ?").run(req.params.id);
-        db.prepare("DELETE FROM conversations WHERE id = ?").run(req.params.id);
-        res.json({ success: true });
-    } catch (error) {
-        console.error("Error eliminando conversación:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
+// ==================== OTROS ENDPOINTS ====================
 
 // Endpoint de salud
 app.get("/health", (req, res) => {
@@ -209,12 +367,15 @@ app.get("/debug/database", (req, res) => {
     try {
         const conversations = db.prepare("SELECT * FROM conversations").all();
         const messages = db.prepare("SELECT * FROM messages").all();
+        const documents = getAllDocuments();
         
         res.json({
             total_conversations: conversations.length,
             total_messages: messages.length,
+            total_documents: documents.length,
             conversations: conversations,
-            messages: messages
+            messages: messages,
+            documents: documents
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -223,6 +384,7 @@ app.get("/debug/database", (req, res) => {
 
 const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`Servidor con streaming y BD listo en http://localhost:${PORT}`);
-    console.log(`Conectando a LM Studio en http://192.168.1.24:1234`);
+    console.log(`✅ Servidor con RAG listo en http://localhost:${PORT}`);
+    console.log(`📡 Conectando a LM Studio en http://192.168.1.24:1234`);
+    console.log(`📁 Carga de documentos habilitada`);
 });
