@@ -1,6 +1,17 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./Chat.css";
 
+import chatIcon from "./icons/chat.svg";
+import plusIcon from "./icons/plus.svg";
+import trashIcon from "./icons/trash.svg";
+import userIcon from "./icons/user.svg";
+import botIcon from "./icons/bot.svg";
+import sparklesIcon from "./icons/sparkles.svg";
+import clipIcon from "./icons/clip.svg";
+import sendIcon from "./icons/send.svg";
+import arrowLeftIcon from "./icons/sidebar.svg";
+import arrowRightIcon from "./icons/sidebar.svg";
+
 export default function ModernChat() {
     const [conversations, setConversations] = useState([]);
     const [currentConversationId, setCurrentConversationId] = useState(null);
@@ -23,7 +34,6 @@ export default function ModernChat() {
 
     useEffect(() => {
         if (chatBoxRef.current) {
-            // Scroll suave al final
             chatBoxRef.current.scrollTo({
                 top: chatBoxRef.current.scrollHeight,
                 behavior: 'smooth'
@@ -31,7 +41,6 @@ export default function ModernChat() {
         }
     }, [messages]);
 
-    // Auto-scroll durante el streaming
     useEffect(() => {
         if (isLoading && chatBoxRef.current) {
             const scrollInterval = setInterval(() => {
@@ -39,7 +48,6 @@ export default function ModernChat() {
                     chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
                 }
             }, 100);
-
             return () => clearInterval(scrollInterval);
         }
     }, [isLoading]);
@@ -147,13 +155,9 @@ export default function ModernChat() {
                 for (const line of lines) {
                     if (line.startsWith("data: ")) {
                         const text = line.replace("data: ", "").trim();
-
-                        if (text === "[END]" || text === "[DONE]") {
-                            break;
-                        }
+                        if (text === "[END]" || text === "[DONE]") break;
 
                         streamingContentRef.current += text;
-                        
                         setMessages(prevMessages => {
                             const newMessages = [...prevMessages];
                             newMessages[newMessages.length - 1] = {
@@ -165,11 +169,9 @@ export default function ModernChat() {
                     }
                 }
             }
-
             await loadMessages(convId);
         } catch (error) {
             console.error("Error al enviar mensaje:", error);
-            
             setMessages(prevMessages => {
                 const newMessages = [...prevMessages];
                 newMessages[newMessages.length - 1] = {
@@ -193,25 +195,31 @@ export default function ModernChat() {
 
     return (
         <div className="modern-chat-wrapper">
-            {/* Sidebar */}
             <div className={`modern-sidebar ${showSidebar ? 'show' : 'hide'}`}>
                 <div className="sidebar-header">
                     <div className="app-title">
-                        <div className="app-icon">💬</div>
+                        <div className="app-icon">
+                            <img src={chatIcon} alt="Logo" className="svg-icon" />
+                        </div>
                         <span>SpeakSense</span>
                     </div>
                     <button className="toggle-btn" onClick={() => setShowSidebar(!showSidebar)}>
-                        {showSidebar ? '←' : '→'}
+                        <img 
+                            src={showSidebar ? arrowLeftIcon : arrowRightIcon} 
+                            alt="Toggle Sidebar" 
+                            className="svg-icon small" 
+                        />
                     </button>
                 </div>
-
                 <button className="new-chat-btn" onClick={createNewConversation}>
-                    <span className="plus-icon">+</span>
-                    New Chat
+                    <span className="plus-icon">
+                        <img src={plusIcon} alt="New" className="svg-icon small" />
+                    </span>
+                    Nuevo chat
                 </button>
 
                 <div className="sidebar-section">
-                    <h3 className="section-title">Workspaces</h3>
+                    <h3 className="section-title">Historial de chats</h3>
                     <div className="conversations-container">
                         {conversations.map((conv) => (
                             <div 
@@ -220,7 +228,9 @@ export default function ModernChat() {
                                 onClick={() => setCurrentConversationId(conv.id)}
                             >
                                 <div className="conversation-info">
-                                    <span className="conversation-icon">💬</span>
+                                    <span className="conversation-icon">
+                                        <img src={chatIcon} alt="Chat" className="svg-icon small" />
+                                    </span>
                                     <div className="conversation-text">
                                         <div className="conversation-title">
                                             {conv.title || `Conversación ${conv.id}`}
@@ -234,7 +244,7 @@ export default function ModernChat() {
                                     className="delete-conv-btn"
                                     onClick={(e) => deleteConversation(conv.id, e)}
                                 >
-                                    🗑️
+                                    <img src={trashIcon} alt="Delete" className="svg-icon small" />
                                 </button>
                             </div>
                         ))}
@@ -260,14 +270,17 @@ export default function ModernChat() {
                                 className={`message-bubble ${msg.role === "user" ? "user" : "bot"}`}
                             >
                                 <div className="message-avatar">
-                                    {msg.role === "user" ? "👤" : "🤖"}
+                                    <img 
+                                        src={msg.role === "user" ? userIcon : botIcon} 
+                                        alt={msg.role} 
+                                        className="svg-icon avatar" 
+                                    />
                                 </div>
                                 <div className="message-content">
                                     <div className="message-text">{msg.content || "..."}</div>
                                 </div>
                             </div>
                         ))}
-                        {/* Elemento invisible para hacer scroll automático */}
                         <div style={{ height: '1px' }} />
                     </div>
                 )}
@@ -275,7 +288,9 @@ export default function ModernChat() {
                 {/* Input Area */}
                 <div className="input-container">
                     <div className="input-wrapper">
-                        <div className="input-icon">✨</div>
+                        <div className="input-icon">
+                            <img src={sparklesIcon} alt="Sparkles" className="svg-icon" />
+                        </div>
                         <input
                             type="text"
                             value={input}
@@ -286,15 +301,15 @@ export default function ModernChat() {
                             className="modern-input"
                         />
                         <div className="input-actions">
-                            <button className="action-btn" title="Attach">📎</button>
-                            <button className="action-btn" title="Settings">⚙️</button>
-                            <button className="action-btn" title="Options">⋯</button>
+                            <button className="action-btn" title="Attach">
+                                <img src={clipIcon} alt="Attach" className="svg-icon" />
+                            </button>
                             <button 
                                 className="send-btn"
                                 onClick={sendMessage}
                                 disabled={isLoading || !input.trim()}
                             >
-                                ↑
+                                <img src={sendIcon} alt="Send" className="svg-icon" />
                             </button>
                         </div>
                     </div>

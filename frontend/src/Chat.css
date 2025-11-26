@@ -18,6 +18,27 @@ html, body {
     height: 100%;
 }
 
+/* Clase base para todos los iconos */
+.svg-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    object-fit: contain;
+}
+
+/* Para iconos más pequeños (botones de acción, metadatos) */
+.svg-icon.small {
+    width: 16px;
+    height: 16px;
+}
+
+/* Para los avatares del chat */
+.svg-icon.avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%; /* Si tus iconos tienen fondo, esto los hace redondos */
+}
+
 .modern-chat-wrapper {
     display: flex;
     width: 100vw;
