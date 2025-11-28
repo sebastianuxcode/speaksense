@@ -195,11 +195,13 @@ app.delete("/conversations/:id", (req, res) => {
 app.get("/chat-stream", async (req, res) => {
     const message = req.query.message;
     const conversationId = req.query.conversationId;
-    const documentId = req.query.documentId; // Nuevo parámetro
+    const documentId = req.query.documentId;
+    const ragMode = req.query.ragMode || "hybrid"; // "strict" o "hybrid"
 
     console.log("Mensaje recibido:", message);
     console.log("Conversation ID:", conversationId);
     console.log("Document ID:", documentId);
+    console.log("RAG Mode:", ragMode);
 
     // Configurar SSE
     res.setHeader("Content-Type", "text/event-stream");
@@ -236,8 +238,12 @@ app.get("/chat-stream", async (req, res) => {
                 
                 console.log(`Encontrados ${chunks.length} chunks relevantes`);
                 
-                // Crear prompt con contexto
-                const ragPrompt = `Basándote ÚNICAMENTE en la siguiente información del documento, responde la pregunta del usuario. Si la información no está en el documento, di que no puedes responder basándote en el documento proporcionado.
+                // Crear prompt según el modo
+                let ragPrompt;
+                
+                if (ragMode === "strict") {
+                    // Modo estricto: solo documento
+                    ragPrompt = `Basándote ÚNICAMENTE en la siguiente información del documento, responde la pregunta del usuario. Si la información no está en el documento, di claramente que no puedes responder basándote en el documento proporcionado.
 
 CONTEXTO DEL DOCUMENTO:
 ${context}
@@ -245,6 +251,22 @@ ${context}
 PREGUNTA DEL USUARIO: ${message}
 
 RESPUESTA:`;
+                } else {
+                    // Modo híbrido: documento + conocimiento general
+                    ragPrompt = `Tienes acceso a la siguiente información de un documento. Úsala como referencia principal para responder, pero también puedes complementar con tu conocimiento general cuando sea relevante y útil. Indica claramente cuando estás usando información del documento vs. conocimiento general.
+
+INFORMACIÓN DEL DOCUMENTO:
+${context}
+
+PREGUNTA DEL USUARIO: ${message}
+
+INSTRUCCIONES:
+- Prioriza la información del documento cuando responda directamente a la pregunta
+- Si el documento no tiene toda la información, puedes complementar con conocimiento general
+- Indica la fuente de tu información ("Según el documento..." o "Basándome en conocimiento general...")
+
+RESPUESTA:`;
+                }
 
                 finalMessages = [
                     ...history.slice(0, -1).map(msg => ({

@@ -7,7 +7,7 @@ import trashIcon from "./icons/trash.svg";
 import userIcon from "./icons/user.svg";
 import botIcon from "./icons/bot.svg";
 import sparklesIcon from "./icons/sparkles.svg";
-import documentIcon from "./icons/document.svg";
+import clipIcon from "./icons/clip.svg";
 import sendIcon from "./icons/send.svg";
 import arrowLeftIcon from "./icons/sidebar.svg";
 import arrowRightIcon from "./icons/sidebar.svg";
@@ -24,6 +24,7 @@ export default function ModernChat() {
     const [documents, setDocuments] = useState([]);
     const [selectedDocumentId, setSelectedDocumentId] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [ragMode, setRagMode] = useState("hybrid"); // "strict" o "hybrid"
     
     const chatBoxRef = useRef(null);
     const streamingContentRef = useRef("");
@@ -210,9 +211,9 @@ export default function ModernChat() {
             const encodedMessage = encodeURIComponent(messageToSend);
             let url = `http://localhost:3000/chat-stream?message=${encodedMessage}&conversationId=${convId}`;
             
-            // Agregar documentId si hay uno seleccionado
+            // Agregar documentId y modo RAG si hay uno seleccionado
             if (selectedDocumentId) {
-                url += `&documentId=${selectedDocumentId}`;
+                url += `&documentId=${selectedDocumentId}&ragMode=${ragMode}`;
             }
 
             const response = await fetch(url);
@@ -304,14 +305,7 @@ export default function ModernChat() {
                 {/* Sección de Documentos */}
                 <div className="sidebar-section">
                     <h3 className="section-title">Documentos</h3>
-                     
-                    <button 
-                        className="upload-doc-btn"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading}
-                    >
-                        {isUploading ? "Procesando..." : "📄 Cargar documento"}
-                    </button>
+                    
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -333,7 +327,7 @@ export default function ModernChat() {
                                     )}
                                 >
                                     <div className="document-info">
-                                        <span className="document-icon"><img src={documentIcon} alt="Document" className="svg-icon" /></span>
+                                        <span className="document-icon">📄</span>
                                         <div className="document-text">
                                             <div className="document-name">
                                                 {doc.filename}
@@ -358,53 +352,44 @@ export default function ModernChat() {
                 <div className="sidebar-section">
                     <h3 className="section-title">Historial de chats</h3>
                     <div className="conversations-container">
-                        {conversations.map((conv) => (
-                            <div 
-                                key={conv.id}
-                                className={`conversation-card ${currentConversationId === conv.id ? 'active' : ''}`}
-                                onClick={() => setCurrentConversationId(conv.id)}
-                            >
-                                <div className="conversation-info">
-                                    <span className="conversation-icon">
-                                        <img src={chatIcon} alt="Chat" className="svg-icon small" />
-                                    </span>
-                                    <div className="conversation-text">
-                                        <div className="conversation-title">
-                                            {conv.title || `Conversación ${conv.id}`}
-                                        </div>
-                                        <div className="conversation-meta">
-                                            {conv.message_count} mensajes
-                                            {conv.document_id && " • 📄"}
+                        {conversations.length === 0 ? (
+                            <p className="empty-message">No hay conversaciones guardadas</p>
+                        ) : (
+                            conversations.map((conv) => (
+                                <div 
+                                    key={conv.id}
+                                    className={`conversation-card ${currentConversationId === conv.id ? 'active' : ''}`}
+                                    onClick={() => setCurrentConversationId(conv.id)}
+                                >
+                                    <div className="conversation-info">
+                                        <span className="conversation-icon">
+                                            <img src={chatIcon} alt="Chat" className="svg-icon small" />
+                                        </span>
+                                        <div className="conversation-text">
+                                            <div className="conversation-title">
+                                                {conv.title || `Conversación ${conv.id}`}
+                                            </div>
+                                            <div className="conversation-meta">
+                                                {conv.message_count} mensajes
+                                                {conv.document_id && " • 📄"}
+                                            </div>
                                         </div>
                                     </div>
+                                    <button 
+                                        className="delete-conv-btn"
+                                        onClick={(e) => deleteConversation(conv.id, e)}
+                                    >
+                                        <img src={trashIcon} alt="Delete" className="svg-icon small" />
+                                    </button>
                                 </div>
-                                <button 
-                                    className="delete-conv-btn"
-                                    onClick={(e) => deleteConversation(conv.id, e)}
-                                >
-                                    <img src={trashIcon} alt="Delete" className="svg-icon small" />
-                                </button>
-                            </div>
-                        ))}
+                            ))
+                        )}
                     </div>
                 </div>
             </div>
 
             {/* Main Chat Area */}
             <div className="modern-chat-main">
-                {/* Indicador de documento activo */}
-                {selectedDoc && (
-                    <div className="active-document-banner">
-                        <span><img src={documentIcon} alt="Document" className="svg-icon" /> Consultando: <strong>{selectedDoc.filename}</strong></span>
-                        <button 
-                            className="close-doc-btn"
-                            onClick={() => setSelectedDocumentId(null)}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
                 {messages.length === 0 ? (
                     <div className="empty-state">
                         <div className="orb-container">
@@ -446,29 +431,65 @@ export default function ModernChat() {
                     </div>
                 )}
 
-                {/* Input Area */}
-                <div className="input-container">
-                    <div className="input-wrapper">
-                        <div className="input-icon">
-                            <img src={sparklesIcon} alt="Sparkles" className="svg-icon" />
+                {/* Input Area con banner de documento */}
+                <div className="input-area-wrapper">
+                    {/* Indicador de documento activo - AHORA AQUÍ */}
+                    {selectedDoc && (
+                        <div className="active-document-banner">
+                            <div className="banner-left">
+                                <span>📄 Consultando: <strong>{selectedDoc.filename}</strong></span>
+                            </div>
+                            <div className="banner-right">
+                                <select 
+                                    className="rag-mode-select"
+                                    value={ragMode}
+                                    onChange={(e) => setRagMode(e.target.value)}
+                                >
+                                    <option value="hybrid">🔄 Modo Híbrido</option>
+                                    <option value="strict">🔒 Solo Documento</option>
+                                </select>
+                                <button 
+                                    className="close-doc-btn"
+                                    onClick={() => setSelectedDocumentId(null)}
+                                >
+                                    ✕
+                                </button>
+                            </div>
                         </div>
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyPress={handleKeyPress}
-                            placeholder={selectedDoc ? "Pregunta sobre el documento seleccionado" : "Pregunta lo que quieras"}
-                            disabled={isLoading}
-                            className="modern-input"
-                        />
-                        <div className="input-actions">
-                            <button 
-                                className="send-btn"
-                                onClick={sendMessage}
-                                disabled={isLoading || !input.trim()}
-                            >
-                                <img src={sendIcon} alt="Send" className="svg-icon" />
-                            </button>
+                    )}
+
+                    {/* Input Area */}
+                    <div className="input-container">
+                        <div className="input-wrapper">
+                            <div className="input-icon">
+                                <img src={sparklesIcon} alt="Sparkles" className="svg-icon" />
+                            </div>
+                            <input
+                                type="text"
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyPress={handleKeyPress}
+                                placeholder={selectedDoc ? "Pregunta sobre el documento..." : "Ask Anything..."}
+                                disabled={isLoading}
+                                className="modern-input"
+                            />
+                            <div className="input-actions">
+                                <button 
+                                    className="action-btn" 
+                                    title="Cargar documento"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading}
+                                >
+                                    <img src={clipIcon} alt="Attach" className="svg-icon" />
+                                </button>
+                                <button 
+                                    className="send-btn"
+                                    onClick={sendMessage}
+                                    disabled={isLoading || !input.trim()}
+                                >
+                                    <img src={sendIcon} alt="Send" className="svg-icon" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
