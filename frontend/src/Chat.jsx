@@ -11,6 +11,9 @@ import clipIcon from "./icons/clip.svg";
 import sendIcon from "./icons/send.svg";
 import arrowLeftIcon from "./icons/sidebar.svg";
 import arrowRightIcon from "./icons/sidebar.svg";
+import documentIcon from "./icons/document.svg";
+import lockIcon from "./icons/refresh.svg";
+import refreshIcon from "./icons/lock.svg";
 
 export default function ModernChat() {
     const [conversations, setConversations] = useState([]);
@@ -25,6 +28,7 @@ export default function ModernChat() {
     const [selectedDocumentId, setSelectedDocumentId] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [ragMode, setRagMode] = useState("hybrid"); // "strict" o "hybrid"
+    const [showRagModeDropdown, setShowRagModeDropdown] = useState(false);
     
     const chatBoxRef = useRef(null);
     const streamingContentRef = useRef("");
@@ -60,6 +64,18 @@ export default function ModernChat() {
             return () => clearInterval(scrollInterval);
         }
     }, [isLoading]);
+
+    // Cerrar dropdown al hacer click fuera
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showRagModeDropdown && !event.target.closest('.custom-select-wrapper')) {
+                setShowRagModeDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showRagModeDropdown]);
 
     const loadConversations = async () => {
         try {
@@ -181,23 +197,30 @@ export default function ModernChat() {
     const sendMessage = async () => {
         if (!input.trim() || isLoading) return;
 
+        const messageToSend = input.trim();
+        
+        // Crear conversación ANTES de enviar el mensaje si no existe
         let convId = currentConversationId;
         if (!convId) {
-            const response = await fetch("http://localhost:3000/conversations", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    title: input.substring(0, 50),
-                    documentId: selectedDocumentId 
-                })
-            });
-            const data = await response.json();
-            convId = data.id;
-            setCurrentConversationId(convId);
-            await loadConversations();
+            try {
+                const response = await fetch("http://localhost:3000/conversations", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        title: messageToSend.substring(0, 50),
+                        documentId: selectedDocumentId 
+                    })
+                });
+                const data = await response.json();
+                convId = data.id;
+                setCurrentConversationId(convId);
+                await loadConversations();
+            } catch (error) {
+                console.error("Error creando conversación:", error);
+                return;
+            }
         }
 
-        const messageToSend = input.trim();
         setInput("");
         setIsLoading(true);
         streamingContentRef.current = "";
@@ -274,6 +297,30 @@ export default function ModernChat() {
         }
     };
 
+    // Función para formatear texto markdown básico
+    const formatMarkdown = (text) => {
+        if (!text) return "";
+        
+        let formatted = text;
+        
+        // Negritas: **texto** o __texto__
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        formatted = formatted.replace(/__(.*?)__/g, '<strong>$1</strong>');
+        
+        // Cursiva: *texto* o _texto_
+        formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        formatted = formatted.replace(/_(.*?)_/g, '<em>$1</em>');
+        
+        // Listas con guiones o asteriscos
+        formatted = formatted.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>');
+        formatted = formatted.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        
+        // Saltos de línea
+        formatted = formatted.replace(/\n/g, '<br/>');
+        
+        return formatted;
+    };
+
     const selectedDoc = documents.find(d => d.id === selectedDocumentId);
 
     return (
@@ -327,7 +374,9 @@ export default function ModernChat() {
                                     )}
                                 >
                                     <div className="document-info">
-                                        <span className="document-icon">📄</span>
+                                        <span className="document-icon">
+                                            <img src={documentIcon} alt="Document" className="svg-icon small" />
+                                        </span>
                                         <div className="document-text">
                                             <div className="document-name">
                                                 {doc.filename}
@@ -371,7 +420,12 @@ export default function ModernChat() {
                                             </div>
                                             <div className="conversation-meta">
                                                 {conv.message_count} mensajes
-                                                {conv.document_id && " • 📄"}
+                                                {conv.document_id && (
+                                                    <>
+                                                        {" • "}
+                                                        <img src={documentIcon} alt="Document" className="svg-icon tiny inline-icon" />
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -398,13 +452,13 @@ export default function ModernChat() {
                         <h1 className="empty-title">
                             {selectedDoc 
                                 ? `Pregúntame sobre ${selectedDoc.filename}` 
-                                : "Ready to Create Something New?"
+                                : "Inicia una conversación o analiza tus archivos"
                             }
                         </h1>
                         <p className="empty-subtitle">
                             {selectedDoc 
                                 ? "Haz preguntas sobre el contenido del documento" 
-                                : "Start a conversation and let AI assist you"
+                                : "Sube tus documentos y deja que la IA te guíe a través de su contenido"
                             }
                         </p>
                     </div>
@@ -423,7 +477,14 @@ export default function ModernChat() {
                                     />
                                 </div>
                                 <div className="message-content">
-                                    <div className="message-text">{msg.content || "..."}</div>
+                                    <div 
+                                        className="message-text"
+                                        dangerouslySetInnerHTML={{ 
+                                            __html: msg.role === "bot" 
+                                                ? formatMarkdown(msg.content || "...") 
+                                                : msg.content || "..."
+                                        }}
+                                    />
                                 </div>
                             </div>
                         ))}
@@ -437,17 +498,51 @@ export default function ModernChat() {
                     {selectedDoc && (
                         <div className="active-document-banner">
                             <div className="banner-left">
-                                <span>📄 Consultando: <strong>{selectedDoc.filename}</strong></span>
+                                <img src={documentIcon} alt="Document" className="svg-icon small" />
+                                <span>Consultando: <strong>{selectedDoc.filename}</strong></span>
                             </div>
                             <div className="banner-right">
-                                <select 
-                                    className="rag-mode-select"
-                                    value={ragMode}
-                                    onChange={(e) => setRagMode(e.target.value)}
-                                >
-                                    <option value="hybrid">🔄 Modo Híbrido</option>
-                                    <option value="strict">🔒 Solo Documento</option>
-                                </select>
+                                <div className="custom-select-wrapper">
+                                    <button 
+                                        className="custom-select-button"
+                                        onClick={() => setShowRagModeDropdown(!showRagModeDropdown)}
+                                    >
+                                        <img 
+                                            src={ragMode === "hybrid" ? refreshIcon : lockIcon} 
+                                            alt="Mode" 
+                                            className="svg-icon tiny" 
+                                        />
+
+                                        <span>{ragMode === "hybrid" ? "Modo Híbrido" : "Solo Documento"}</span>
+                                        <span className="dropdown-arrow">{showRagModeDropdown ? "▲" : "▼"}</span>
+                                    </button>
+                                    
+                                    {showRagModeDropdown && (
+                                        <div className="custom-select-dropdown">
+                                            <div 
+                                                className={`custom-select-option ${ragMode === "hybrid" ? "active" : ""}`}
+                                                onClick={() => {
+                                                    setRagMode("hybrid");
+                                                    setShowRagModeDropdown(false);
+                                                }}
+                                            >
+                                                <img src={refreshIcon} alt="Hybrid" className="svg-icon tiny" />
+                                                <span>Modo Híbrido</span>
+                                            </div>
+                                            <div 
+                                                className={`custom-select-option ${ragMode === "strict" ? "active" : ""}`}
+                                                onClick={() => {
+                                                    setRagMode("strict");
+                                                    setShowRagModeDropdown(false);
+                                                }}
+                                            >
+                                                <img src={lockIcon} alt="Strict" className="svg-icon tiny" />
+                                                <span>Solo Documento</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                
                                 <button 
                                     className="close-doc-btn"
                                     onClick={() => setSelectedDocumentId(null)}
@@ -469,7 +564,7 @@ export default function ModernChat() {
                                 value={input}
                                 onChange={e => setInput(e.target.value)}
                                 onKeyPress={handleKeyPress}
-                                placeholder={selectedDoc ? "Pregunta sobre el documento..." : "Ask Anything..."}
+                                placeholder={selectedDoc ? "Pregunta sobre el documento..." : "Pregunta lo que quieras..."}
                                 disabled={isLoading}
                                 className="modern-input"
                             />

@@ -284,6 +284,7 @@
 .messages-container {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 24px;
     display: flex;
     flex-direction: column;
@@ -337,6 +338,7 @@
 
 .message-content {
     max-width: 70%;
+    min-width: 100px;
     display: flex;
     flex-direction: column;
 }
@@ -351,6 +353,9 @@
     font-size: 15px;
     line-height: 1.6;
     word-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
 }
 
 .message-bubble.user .message-text {
@@ -363,6 +368,45 @@
     background: var(--bg-secondary);
     color: var(--text-primary);
     border-bottom-left-radius: 4px;
+}
+
+/* ==================== FORMATO DE MENSAJES ==================== */
+.message-text strong {
+    font-weight: 700;
+}
+
+.message-text em {
+    font-style: italic;
+}
+
+.message-text ul {
+    margin: 8px 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.message-text li {
+    position: relative;
+    padding-left: 20px;
+    margin-bottom: 4px;
+}
+
+.message-text li:before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: bold;
+}
+
+.message-bubble.user .message-text li:before {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.message-text br {
+    display: block;
+    content: "";
+    margin: 4px 0;
 }
 
 /* ==================== WRAPPER PARA INPUT Y BANNER ==================== */
@@ -546,7 +590,6 @@
 .svg-icon {
     width: 20px;
     height: 20px;
-    filter: invert(1);
 }
 
 .svg-icon.small {
@@ -666,4 +709,107 @@
         width: 150px;
         height: 150px;
     }
+}
+
+/* ==================== ICONOS ADICIONALES ==================== */
+.svg-icon.tiny {
+    width: 12px;
+    height: 12px;
+}
+
+.inline-icon {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 2px;
+}
+
+.document-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Iconos en el select del banner */
+.rag-mode-select {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Ajustar tamaño de iconos en documento */
+.document-card .document-icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* ==================== CUSTOM SELECT PARA MODO RAG ==================== */
+.custom-select-wrapper {
+    position: relative;
+}
+
+.custom-select-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.custom-select-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dropdown-arrow {
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #1a1a2e;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    min-width: 160px;
+}
+
+.custom-select-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.custom-select-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.custom-select-option.active {
+    background: rgba(102, 126, 234, 0.2);
+    color: #667eea;
+}
+
+.custom-select-option .svg-icon {
+    flex-shrink: 0;
+}
+
+/* Remover estilos del select antiguo */
+.rag-mode-select {
+    display: none;
 }
