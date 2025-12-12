@@ -305,7 +305,7 @@ RESPUESTA:`;
         console.log("Conectando a LM Studio...");
 
         // Petición a LM Studio
-        const response = await fetch("http://192.168.1.24:1234/v1/chat/completions", {
+        const response = await fetch("http://127.0.0.1:1234/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -407,6 +407,6 @@ app.get("/debug/database", (req, res) => {
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`✅ Servidor con RAG listo en http://localhost:${PORT}`);
-    console.log(`📡 Conectando a LM Studio en http://192.168.1.24:1234`);
+    console.log(`🔡 Conectando a LM Studio en http://127.0.0.1:1234`);
     console.log(`📁 Carga de documentos habilitada`);
 });
